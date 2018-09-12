@@ -10,8 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from se_module import SELayer
-
 class Basic_Block(nn.Module):
     expansion = 1
 

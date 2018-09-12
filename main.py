@@ -15,6 +15,7 @@ import argparse
 import sys
 
 from models import *
+from M_lib import file_lib
 import utils
 from utils import progress_bar
 from utils import learning_rate
@@ -24,6 +25,10 @@ import opt
 from torchsummary import summary
 
 from autoaugment import CIFAR10Policy
+import json
+import csv
+import collections as cl
+
 
 
 # parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -51,6 +56,8 @@ transform_train = transforms.Compose([
     # else if dataset == 'cifar100':
     #     transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
 ])
+
+
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
@@ -87,6 +94,7 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
+
 #summary(net, (3, 32, 32))
 
 #for parameter in net.parameters():
@@ -95,17 +103,49 @@ if device == 'cuda':
 params = sum(p.numel() for p in net.parameters() if p.requires_grad)
 print(params)
 
+exp_path = './exp_result/' + args.save
+
 if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.t7')
+    assert os.path.isdir(exp_path), 'Error: no checkpoint directory found!'
+    exp_path = exp_path + '/'
+    if args.ckpt == 'best':
+        print('==> Resuming from best checkpoint..')
+        checkpoint = torch.load(exp_path+'ckpt_best.t7')
+    elif args.ckpt == 'last':
+        print('==> Resuming from last checkpoint..')
+        checkpoint = torch.load(exp_path+'ckpt.t7')
     net.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
+    start_epoch = checkpoint['epoch'] + 1
+
+else:
+    exp_path = file_lib.make_unique_directory_path(exp_path)
+    if not os.path.isdir(exp_path):
+        os.makedirs(exp_path)
+    json_log = open(exp_path+'log.json', 'w')
+    csv_log = open(exp_path+'log.csv', 'w')
+
+    json.dump({'params':params}, json_log)
+    writer = csv.writer(csv_log)
+    writer.writerow(['epoch','trainLoss','trainAcc','testLoss','testAcc'])
+    json_log.close()
+    csv_log.close()
+
 
 criterion = nn.CrossEntropyLoss()
 # optimizer = optim.SGD(net.parameters(), lr=learning_rate(args.lr, epoch, last_epoch), momentum=0.9, weight_decay=5e-4)
+
+
+log = cl.OrderedDict()
+
+def write_log():
+    json_log = open(exp_path+'log.json', 'a')
+    csv_log = open(exp_path+'log.csv', 'a')
+    writer = csv.writer(csv_log)
+    json.dump(log, json_log, indent=0)
+    writer.writerow(log.values())
+    json_log.close()
+    csv_log.close()
 
 # Training
 def train(epoch):
@@ -118,8 +158,8 @@ def train(epoch):
     optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
-        inputs.cuda()
-        targets.cuda()
+        #inputs.cuda()
+        #targets.cuda()
         optimizer.zero_grad()
         outputs = net(inputs)
         loss = criterion(outputs, targets)
@@ -131,8 +171,13 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) | lr: %.3f'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, lr))
+
+        log['epoch'] = epoch + 1
+        log['trainLoss'] = train_loss/(batch_idx+1)
+        log['trainAcc'] = 100.*correct/total
+
+        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) | lr: %.3f' % (log['trainLoss'], log['trainAcc'], correct, total, lr))
+    
     # print('Loss: {:.3f} | Acc: {:.3f}% ({:d}/{:d}) | lr: {:.3f}'.format(train_loss/(batch_idx+1), 100.*correct/total, correct, total, lr))
 def test(epoch):
     global best_acc
@@ -151,24 +196,31 @@ def test(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            log['testLoss'] = test_loss/(batch_idx+1)
+            log['testAcc'] = 100.*correct/total
+
+            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)' % (log['testLoss'], log['testAcc'], correct, total))
 
     # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Update Best Acc from {:.3f} to {:.3f}'.format(best_acc, acc))
-        # print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
+    #acc = 100.*correct/total
+    state = {
+        'net': net.state_dict(),
+        #'acc': acc,
+        'acc': log['testAcc'],
+        'epoch': epoch,
         }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.t7')
-        best_acc = acc
+    torch.save(state, exp_path+'ckpt.t7')
+    if log['testAcc'] > best_acc:
+    #if acc > best_acc:
+        print('Update Best Acc from {:.3f} to {:.3f}'.format(best_acc, log['testAcc']))
+        #print('Update Best Acc from {:.3f} to {:.3f}'.format(best_acc, acc))
+        # print('Saving..')
+        torch.save(state, exp_path+'ckpt_best.t7')
+        best_acc = log['testAcc']
+        #best_acc = acc
+
     print('Best Acc is {:.3f}'.format(best_acc))
+    write_log()
 
 
 for epoch in range(start_epoch, args.nEpochs):

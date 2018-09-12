@@ -134,6 +134,7 @@ def format_time(seconds):
 
 def learning_rate(init, epoch, last_epoch):
     optim_factor = 0
+    epoch+=1
     if(epoch >= last_epoch * 0.75):
         optim_factor = 2
     elif(epoch >= last_epoch * 0.5):

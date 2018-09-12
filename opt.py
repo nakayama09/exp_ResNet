@@ -48,9 +48,6 @@ parser.add_argument('-weight_decay',type=float, dest='weight_decay', action='sto
 parser.add_argument('-resume', '-r', dest='resume', action='store_true',
 										help='resume from checkpoint')
 
-parser.add_argument('-resume', '-r', dest='resume', action='store_true',
-										help='resume from checkpoint')
-
 parser.add_argument('-ckpt', dest='ckpt', action='store',
 										default='last',
 										help='which start checkpoint last or best (default: last)')
