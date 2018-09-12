@@ -1,5 +1,9 @@
-# Exp ResNet for server test
-This repository contains the implementation for server test
+# Exp ResNet for GPU server test in PyTorch
+This repository contains the implementation for GPU server test in PyTorch
 
-#Usage
-Install [Pytorch](https://pytorch.org/)
+## Requirements
+Install [PyTorch](https://pytorch.org/), and run:
+~~~
+pip install numpy  
+pip install Pillow
+~~~
