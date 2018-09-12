@@ -41,15 +41,8 @@ parser.add_argument('-weight_decay',type=float, dest='weight_decay', action='sto
 										default=0.0005,
 										help='weight decay (default: 5.0e-4)')
 
-parser.add_argument('-m_path', dest='model_path', action='store',
-										default=None,
-										help='to use saved model, load from this model path. (default: None)')
-
 parser.add_argument('-resume', '-r', dest='resume', action='store_true',
 										help='resume from checkpoint')
-# parser.add_argument('-o', dest='optimizer', action='store',
-# 										default="sgd",
-# 										help='select optimizer(sgd, Adam, RMSProp) (default: sgd)')
 
 args = parser.parse_args()
 
